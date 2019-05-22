@@ -1,14 +1,14 @@
 # fMRI Preprocess
 
-Various scripts for preprocessing fMRI data.\
+Various scripts for preprocessing fMRI data.
 
 ### Dependencies: 
 afni\
 fsl\
-ants (for preprocess.py)\
+ants (for preprocess.py)
 
 ### Python script
-preprocess.py uses Nipype.\
+preprocess.py uses Nipype.
 
 ### Bash scripts
 The two *.sh scripts go together:\
