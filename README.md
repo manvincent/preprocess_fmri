@@ -20,5 +20,5 @@ preprocess_parameters.sh is for setting up the preprocessing parameters.\
 preprocess.sh executes preprocessing functions.
 
 To run:\
-source preprocess_parameters.sh
+source preprocess_parameters.sh  
 bash preprocess.sh
