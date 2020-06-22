@@ -30,6 +30,7 @@ import nipype.interfaces.utility as util  # utility
 import nipype.interfaces.fsl as fsl  # fsl
 import nipype.interfaces.afni as afni  # afni
 import nipype.interfaces.ants as ants  # ANTS
+from nipype.utils.filemanip import Path
 # Import prepackaged workflows
 from nipype.workflows.fmri.fsl.preprocess import create_susan_smooth
 
@@ -46,24 +47,25 @@ num_cores = multiprocessing.cpu_count() # for whole preprocessing (here uses all
 ANTS_num_threads=1 # for the ANTS modules (can be different than num_cores)
 
 # Locations
-expDir = '/media/canlabadmin/ffd2/scratch2/vince/RF3B' # Location of your experiment (main) folder 
-rawDir = expDir + os.sep + 'Raw_nii'  # Location of raw subject folders within your expDir
-outDir = expDir + os.sep + 'Preprocessed'  # Make preprocessing directory within your expDir
+expDir = '/home/vman/Documents/iowa_risk_fmri/data' # Location of your experiment (main) folder 
+rawDir = expDir + os.sep + 'controls'  # Location of raw subject folders within your expDir
+outDir = expDir + os.sep + 'preprocessed'  # Make preprocessing directory within your expDir
 if not os.path.exists(outDir):
     os.makedirs(outDir)
-workDir = outDir + os.sep + 'WorkingDir'  # Working directory inside your 'Preprocessed' folder
+workDir = outDir + os.sep + 'workingDir'  # Working directory inside your 'Preprocessed' folder
 if not os.path.exists(workDir):
     os.makedirs(workDir)
 # Templates paths
 templateDir = expDir + os.sep + 'Templates' # Folder of templates in your expDir 
-priorDir = templateDir + os.sep + 'Oasis' + os.sep + 'Priors2'
+priorDir = templateDir + os.sep  + 'Priors2'
 # Standard space templates 
-MNI_2mm_brain = templateDir + os.sep + 'MNI152_T1_2mm_brain.nii.gz'
-MNI_2mm_brain_mask = templateDir + os.sep + 'MNI152_T1_2mm_brain_mask.nii.gz'
+MNI_2mm_brain = templateDir + os.sep + 'CIT168_2mm_MNI_warped.nii.gz'
+MNI_2mm_brain_mask = templateDir + os.sep + 'CIT_mask.nii.gz'
 # ANTS templates for brain extraction
-extractTemplate = templateDir +  os.sep + 'Oasis' + os.sep +'T_template0.nii.gz'
-extractProb = templateDir +  os.sep + 'Oasis' + os.sep + 'T_template0_BrainCerebellumProbabilityMask.nii.gz'
-extractMask = templateDir + os.sep + 'Oasis' + os.sep + 'T_template0_BrainCerebellumRegistrationMask.nii.gz'
+extractTemplate = f'{templateDir}/Oasis/T_template0.nii.gz'
+extractProb = f'{templateDir}/Oasis/T_template0_BrainCerebellumProbabilityMask.nii.gz'
+extractMask = f'{templateDir}/Oasis/T_template0_BrainCerebellumRegistrationMask.nii.gz'
+
 # ANTS templates for segmentation
 segCSF = priorDir + os.sep + 'priors1.nii.gz'
 segGM = priorDir + os.sep + 'priors2.nii.gz'
@@ -73,17 +75,17 @@ segWM = priorDir + os.sep + 'priors3.nii.gz'
 # Specify data to preprocess
 # Count all subfolders
 subList = next(os.walk(rawDir))[1]
-runList = ['run1', 'run2', 'run3', 'run4', 'run5', 'run6'] # These should be the same name as your EPI Niftis
+runList = ['run1', 'run2', 'run3', 'run4'] # These should be the same name as your EPI Niftis
 # Example debugging with single subject/run
 #subList = ['RF3A_S07']
 #runList = ['run1']
 
 # Preprocessing parameters
-TR = 1.0  # TR of data
-numDisdaq = 4  # Number of initial volumes to delete
+TR = 1.5  # TR of data
+numDisdaq = 0  # Number of initial volumes to delete
 WMthresh=0.75 # WM covariate mask thresholds
 CSFthresh=0.75 # CSF covariate mask thresholds
-fwhmVal = 5 # Smoothing kernel in mm
+fwhmVal = 8 # Smoothing kernel in mm
 
 
 #### End experiment parameters
