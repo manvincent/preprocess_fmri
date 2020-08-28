@@ -12,6 +12,8 @@
 # --> --> --> --> run2.nii.gz
 # --> --> --> --> run3.nii.gz ..etc (your EPIs for each run)
 # --> --> --> --> t1.nii.gz (your structural)
+# --> --> --> --> b0_mag.nii.gz (3d fieldmap magnitude)
+# --> --> --> --> b0_phase.nii.gz (3d fieldmap phase)
 # --> --> Sub2 (subject folder)
 ## --> --> --> Raw...etc
 
