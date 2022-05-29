@@ -716,7 +716,7 @@ covarWF.connect([
     (inputNode_covar, CSFmeanTS, [('in_EPI','in_file')]),
     (epiMaskCSF, CSFmeanTS, [('out_file','mask')]),
     (inputNode_covar, WMmeanTS, [('in_EPI','in_file')]),
-    (epiMaskCSF, WMmeanTS, [('out_file','mask')]),
+    (epiMaskWM, WMmeanTS, [('out_file','mask')]),
     # Calculate compCor
     # aCompCor
     (inputNode_covar, aCompCor, [('in_EPI','realigned_file')]),

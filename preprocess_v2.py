@@ -1,4 +1,4 @@
-## Nipype preprocessing pipelin for data without fieldmap unwarpping
+## Nipype preprocessing pipelin for data with fieldmap unwarpping
 ## Vincent Man September 30, 2017
 
 ## Print the nipype graph to see details
@@ -66,14 +66,14 @@ if standardSpace == 'MNI':
     standard_brain = templateDir + os.sep + 'MNI152_T1_2mm_brain.nii.gz'
 elif standardSpace == 'CIT':
     standard_brain = templateDir + os.sep + 'CIT168_2mm_MNI_warped.nii.gz'
-else: 
+else:
     raise ValueError('Error! Standard space incorrectly specified')
 # Specify transformation flags
-if template == 'standard': 
+if template == 'standard':
     inv_xfm_flag = [False, False]
-elif template == 'native': 
+elif template == 'native':
     inv_xfm_flag = [False]
-else: 
+else:
     raise ValueError('Error! Template incorrectly specified')
 # ANTS templates for brain extraction
 extractTemplate = templateDir +  os.sep + 'Oasis' + os.sep +'T_template0.nii.gz'
@@ -139,7 +139,7 @@ funcMask = pe.Node(fsl.maths.ApplyMask(
 
 # Bias correction on the anatomical
 anatBiasCorrect = pe.Node(ants.N4BiasFieldCorrection(
-    dimension = 3, 
+    dimension = 3,
     n_iterations = [50,50,30,20],
     convergence_threshold = 0.0,
     shrink_factor = 3,
@@ -224,7 +224,7 @@ magVolTrim = pe.Node(fsl.ExtractROI(
     name='magVolTrim')
 
 magBiasCorrect = pe.Node(ants.N4BiasFieldCorrection(
-    dimension = 3, 
+    dimension = 3,
     n_iterations = [50,50,30,20],
     convergence_threshold = 0.0,
     shrink_factor = 3,
@@ -242,7 +242,7 @@ erode = pe.Node(fsl.maths.ErodeImage(
     name = 'erode')
 
 prepareFmap = pe.Node(fsl.PrepareFieldmap(
-    delta_TE = deltaTE, 
+    delta_TE = deltaTE,
     scanner = 'SIEMENS'),
     name = 'prepareFmap')
 
@@ -266,14 +266,14 @@ epiMean = pe.Node(fsl.maths.MeanImage(
 
 
 epiBiasCorrect = pe.Node(ants.N4BiasFieldCorrection(
-    dimension = 3, 
+    dimension = 3,
     n_iterations = [50,50,30,20],
     convergence_threshold = 0.0,
     shrink_factor = 3,
     bspline_fitting_distance = 300),
     name = 'epiBiasCorrect')
 
-## Register fmap image to magnitude image 
+## Register fmap image to magnitude image
 epi2mag = pe.Node(fsl.FLIRT(
     dof = 6,
     cost = 'normcorr'),
@@ -295,7 +295,7 @@ epiUnwarp = pe.Node(fsl.preprocess.FUGUE(
     nokspace = True),
     name = 'epiUnwarp')
 
-# Estimate signal loss map 
+# Estimate signal loss map
 sigloss = pe.Node(fsl.SigLoss(
     echo_time = TE),
     name = 'sigloss')
@@ -386,7 +386,7 @@ maskRef =  pe.Node(fsl.UnaryMaths(
     output_type='NIFTI_GZ'),
     name='maskRef')
 
-# Transform and mask signal loss map 
+# Transform and mask signal loss map
 applyTransFunc_sigloss = pe.Node(ants.ApplyTransforms(
     args='--float',
     dimension=3,
@@ -400,7 +400,7 @@ siglossMask = pe.Node(fsl.maths.ApplyMask(
     output_type='NIFTI_GZ'),
     name='siglossMask')
 
-# Apply transformations to functional image 
+# Apply transformations to functional image
 applyTransFunc = pe.MapNode(ants.ApplyTransforms(
     args='--float',
     dimension=3,
@@ -450,7 +450,7 @@ merge_compCor = pe.Node(util.Merge(3),
 aCompCor = pe.Node(conf.ACompCor(
     merge_method = 'union',
     variance_threshold = aCompCor_varThresh,
-    repetition_time = TR, 
+    repetition_time = TR,
     pre_filter = 'cosine',
     failure_mode = 'NaN'),
     name = 'aCompCor')
@@ -458,7 +458,7 @@ aCompCor = pe.Node(conf.ACompCor(
 tCompCor = pe.Node(conf.TCompCor(
     merge_method = 'union',
     variance_threshold = tCompCor_varThresh,
-    repetition_time = TR, 
+    repetition_time = TR,
     pre_filter = 'cosine',
     percentile_threshold=0.05,
     failure_mode = 'NaN'),
@@ -482,7 +482,7 @@ def create_Regressor(motionMatrix,outlierMatrix,CSFinput,WMinput,aCompCor_in,tCo
     df_WM.columns = ['WM']
     df_aCompCor = pd.read_table(aCompCor_in,sep='\t',header=[0],engine='python')
     df_tCompCor = pd.read_table(tCompCor_in,sep='\t',header=[0],engine='python')
-    df_outlier = pd.read_table(outlierMatrix,header=None,sep='   ',engine='python')    
+    df_outlier = pd.read_table(outlierMatrix,header=None,sep='   ',engine='python')
     df_concat = pd.concat([df_motion,
                            df_CSF,
                            df_WM,
@@ -502,7 +502,7 @@ createRegressor = pe.Node(Function(
 ### Workflow connections ###
 ### Fieldmap unwarping workflow ###
 fmapWF = pe.Workflow(name='fmapWF')
-fmapWF.base_dir = os.path.join(workDir) 
+fmapWF.base_dir = os.path.join(workDir)
 
 # inputnode - a function free node to iterate over the list of subject names
 inputNode_fmap = pe.Node(util.IdentityInterface(
@@ -624,8 +624,8 @@ dataSink.inputs.substitutions = substitutions
 fmapWF.connect([
     (inputNode_fmap, selectFiles_fmap, [('subject_id','subject_id')]),
     (selectFiles_fmap, magVolTrim, [('mag','in_file')]),
-    (magVolTrim, magBiasCorrect, [('roi_file','input_image')]),    
-    # Prepare fieldmap 
+    (magVolTrim, magBiasCorrect, [('roi_file','input_image')]),
+    # Prepare fieldmap
     (magBiasCorrect, magExtract, [('output_image','in_file')]),
     (magExtract, erode, [('out_file','in_file')]),
     (erode, prepareFmap, [('out_file','in_magnitude')]),
@@ -635,23 +635,23 @@ fmapWF.connect([
     (filterFmap, magWarp, [('fmap_out_file','fmap_in_file')]),
     (erode, magWarp, [('out_file','in_file')]),
     (magWarp, epi2mag, [('warped_file','reference')]),
-    # Extimate registration matrix between EPI and magnitude 
+    # Extimate registration matrix between EPI and magnitude
     (inputNode_fmap, epiMean, [('in_EPI','in_file')]),
     (epiMean, epiBiasCorrect, [('out_file','input_image')]),
-    (epiBiasCorrect, epi2mag, [('output_image','in_file')]),    
+    (epiBiasCorrect, epi2mag, [('output_image','in_file')]),
     # Register fmap to EPI
     (epi2mag, convertXFM, [('out_matrix_file','in_file')]),
     (convertXFM, fmap2epi, [('out_file','in_matrix_file')]),
     (filterFmap, fmap2epi, [('fmap_out_file','in_file')]),
     (epiBiasCorrect, fmap2epi, [('output_image','reference')]),
-    # Estimate signal loss map 
+    # Estimate signal loss map
     (fmap2epi, sigloss, [('out_file','in_file')]),
     # Fieldmap unwarping
     (fmap2epi, epiUnwarp, [('out_file','fmap_in_file')]),
     (inputNode_fmap, epiUnwarp, [('in_EPI','in_file')]),
     # Send to output node
     (epiUnwarp, outputNode_fmap, [('unwarped_file','unwarpedBrain')]),
-    (sigloss, outputNode_fmap, [('out_file','out_sigloss')]),    
+    (sigloss, outputNode_fmap, [('out_file','out_sigloss')]),
     ])
 
 # Anat workflow connections
@@ -674,17 +674,17 @@ anatWF.connect([
     ])
 
 # Registration/Normalisation workflow connections
-if template == 'native': 
-    regWF.connect([        
+if template == 'native':
+    regWF.connect([
         (inputNode_reg, epi2anat, [('EPI_refVol','moving_image'),
                                    ('extractBrain','fixed_image')]),
         (inputNode_reg, anat2std, [('extractBrain','moving_image')]),
         (selectFiles_reg, anat2std, [('standard','fixed_image')]),
         # Split functional image by volumes
         (inputNode_reg, funcSplit, [('in_EPI','in_file')]),
-        # Resample final reference image to resolution of functional 
+        # Resample final reference image to resolution of functional
         (inputNode_reg, resampleRef, [('EPI_refVol','reference_image'),
-                                      ('extractBrain','input_image')]),   
+                                      ('extractBrain','input_image')]),
         # Create mask from resample reference image
         (resampleRef , threshRef, [('output_image','in_file')]),
         (threshRef , maskRef, [('out_file','in_file')]),
@@ -701,21 +701,21 @@ if template == 'native':
         (inputNode_reg, applyTransFunc_sigloss, [('in_sigloss','input_image')]),
         (resampleRef , applyTransFunc_sigloss, [('output_image','reference_image')]),
         (applyTransFunc_sigloss , siglossMask, [('output_image','in_file')]),
-        (maskRef, siglossMask, [('out_file','mask_file')]),        
+        (maskRef, siglossMask, [('out_file','mask_file')]),
         # Outputs to dataSink
         (epi2anat, dataSink, [('composite_transform','Extras.@epi2anat_xfm')]),
         (anat2std, dataSink, [('composite_transform','Extras.@anat2std_xfm')]),
-        (resampleRef , dataSink, [('output_image','Extras.@resampleRef')]),             
-        (maskRef , dataSink, [('out_file','Extras.@resampleRef_mask')]),  
-        (siglossMask, dataSink, [('out_file','Extras.@trans_sigloss')]),        
+        (resampleRef , dataSink, [('output_image','Extras.@resampleRef')]),
+        (maskRef , dataSink, [('out_file','Extras.@resampleRef_mask')]),
+        (siglossMask, dataSink, [('out_file','Extras.@trans_sigloss')]),
         (outputNode_reg, dataSink, [('trans_EPI','Extras.@trans_noDespike')]),
         ])
 elif template == 'standard':
     regWF.connect([
         (inputNode_reg, epi2anat, [('EPI_refVol','moving_image'),
                                    ('extractBrain','fixed_image')]),
-        (inputNode_reg, anat2std, [('extractBrain','moving_image')]),        
-        (selectFiles_reg, anat2std, [('standard','fixed_image')]),        
+        (inputNode_reg, anat2std, [('extractBrain','moving_image')]),
+        (selectFiles_reg, anat2std, [('standard','fixed_image')]),
         (epi2anat, merge, [('composite_transform','in2')]),
         (anat2std, merge, [('composite_transform','in1')]),
         # Split functional image by volumes
@@ -731,13 +731,13 @@ elif template == 'standard':
         # Transform signal loss map
         (merge, applyTransFunc_sigloss, [('out','transforms')]),
         (inputNode_reg, applyTransFunc_sigloss, [('in_sigloss','input_image')]),
-        (selectFiles_reg , applyTransFunc_sigloss, [('standard','reference_image')]),   
+        (selectFiles_reg , applyTransFunc_sigloss, [('standard','reference_image')]),
         (applyTransFunc_sigloss , siglossMask, [('output_image','in_file')]),
-        (selectFiles_reg, siglossMask, [('standard','mask_file')]),                     
+        (selectFiles_reg, siglossMask, [('standard','mask_file')]),
         # Outputs to dataSink
         (epi2anat, dataSink, [('composite_transform','Extras.@epi2anat_xfm')]),
         (anat2std, dataSink, [('composite_transform','Extras.@anat2std_xfm')]),
-        (siglossMask, dataSink, [('out_file','Extras.@trans_sigloss')]),                
+        (siglossMask, dataSink, [('out_file','Extras.@trans_sigloss')]),
         (outputNode_reg, dataSink, [('trans_EPI','Extras.@trans_noDespike')]),
         ])
 
@@ -752,7 +752,7 @@ covarWF.connect([
                                         ('EPI_refVol','reference_image')]),
     # Create CSF and WM masks
     (applyTransInvCSF, createCSFmask, [('output_image','in_file')]),
-    (applyTransInvWM, createWMmask, [('output_image','in_file')]),    
+    (applyTransInvWM, createWMmask, [('output_image','in_file')]),
     # Calculate mean TS for CSF and WM
     (inputNode_covar, CSFmeanTS, [('in_EPI','in_file')]),
     (createCSFmask, CSFmeanTS, [('out_file','mask')]),
@@ -767,9 +767,9 @@ covarWF.connect([
     (merge_compCor, aCompCor, [('out','mask_files')]),
     # tCompCor
     (inputNode_covar, tCompCor, [('in_EPI','realigned_file')]),
-    (inputNode_covar, tCompCor, [('epiMask','mask_files')]),    
+    (inputNode_covar, tCompCor, [('epiMask','mask_files')]),
     # Concatenate all covariates to make matrix
-    (inputNode_covar, createRegressor, [('in_motion','motionMatrix'), 
+    (inputNode_covar, createRegressor, [('in_motion','motionMatrix'),
                                         ('in_outlier','outlierMatrix')]),
     (WMmeanTS, createRegressor, [('out_file','WMinput')]),
     (CSFmeanTS, createRegressor, [('out_file','CSFinput')]),
@@ -779,7 +779,7 @@ covarWF.connect([
 
 
 # Main workflow connections
-if template == 'native': 
+if template == 'native':
     preproc.connect([
         (infoSource, selectFiles_preproc, [('subject_id', 'subject_id'), ('session_id','session_id')]),
         (infoSource, anatWF, [('subject_id','inputNode_anat.subject_id')]),
@@ -791,9 +791,9 @@ if template == 'native':
 
         (volTrim, motionOutliers, [('roi_file','in_file')]),
         (volTrim, motionCorrect, [('roi_file','in_file')]),
-        # Fieldmap workflow 
+        # Fieldmap workflow
         (motionCorrect, fmapWF, [('out_file','inputNode_fmap.in_EPI')]),
-        (fmapWF, extractEPIref, [(('outputNode_fmap.unwarpedBrain',middleVol),'t_min'), 
+        (fmapWF, extractEPIref, [(('outputNode_fmap.unwarpedBrain',middleVol),'t_min'),
                                   ('outputNode_fmap.unwarpedBrain','in_file')]),
         # Registration and normalisation
         (fmapWF, regWF, [('outputNode_fmap.unwarpedBrain','inputNode_reg.in_EPI'),
@@ -803,9 +803,9 @@ if template == 'native':
         # Connections to covariate regression workflow
         (funcExtract, covarWF, [('outEPI','inputNode_covar.epiMask')]),
         (fmapWF, covarWF, [('outputNode_fmap.unwarpedBrain','inputNode_covar.in_EPI')]),
-        (motionCorrect, covarWF, [('par_file','inputNode_covar.in_motion')]), 
-        (anatWF, covarWF, [('outputNode_anat.anatCSF','inputNode_covar.in_CSF'), 
-                           ('outputNode_anat.anatWM','inputNode_covar.in_WM'), 
+        (motionCorrect, covarWF, [('par_file','inputNode_covar.in_motion')]),
+        (anatWF, covarWF, [('outputNode_anat.anatCSF','inputNode_covar.in_CSF'),
+                           ('outputNode_anat.anatWM','inputNode_covar.in_WM'),
                            ('outputNode_anat.extractBrain','inputNode_covar.extractBrain')]),
         (regWF, covarWF, [('outputNode_reg.epi2anat_xfm','inputNode_covar.in_transform')]),
         (extractEPIref, covarWF, [('roi_file','inputNode_covar.EPI_refVol')]),
@@ -832,9 +832,9 @@ elif template == 'standard':
 
         (volTrim, motionOutliers, [('roi_file','in_file')]),
         (volTrim, motionCorrect, [('roi_file','in_file')]),
-        # Fieldmap workflow 
+        # Fieldmap workflow
         (motionCorrect, fmapWF, [('out_file','inputNode_fmap.in_EPI')]),
-        (fmapWF, extractEPIref, [(('outputNode_fmap.unwarpedBrain',middleVol),'t_min'), 
+        (fmapWF, extractEPIref, [(('outputNode_fmap.unwarpedBrain',middleVol),'t_min'),
                                   ('outputNode_fmap.unwarpedBrain','in_file')]),
         # Registration and normalisation
         (fmapWF, regWF, [('outputNode_fmap.unwarpedBrain','inputNode_reg.in_EPI'),
@@ -844,8 +844,8 @@ elif template == 'standard':
         # Connections to covariate regression workflow
         (funcExtract, covarWF, [('outEPI','inputNode_covar.epiMask')]),
         (fmapWF, covarWF, [('outputNode_fmap.unwarpedBrain','inputNode_covar.in_EPI')]),
-        (motionCorrect, covarWF, [('par_file','inputNode_covar.in_motion')]), 
-        (anatWF, covarWF, [('outputNode_anat.anatCSF','inputNode_covar.in_CSF'), 
+        (motionCorrect, covarWF, [('par_file','inputNode_covar.in_motion')]),
+        (anatWF, covarWF, [('outputNode_anat.anatCSF','inputNode_covar.in_CSF'),
                            ('outputNode_anat.anatWM','inputNode_covar.in_WM'),
                            ('outputNode_anat.extractBrain','inputNode_covar.extractBrain')]),
         (regWF, covarWF, [('outputNode_reg.epi2anat_xfm','inputNode_covar.in_transform')]),
