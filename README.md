@@ -16,9 +16,9 @@ v2.0: whole-brain preprocessing
 v2.1_noUnwarp: same as v2 but with no fmap correction  
 v3.0: partial FOV preprocessing  
 &emsp; -modified registration  
-&emsp; -fmap correction using gre sequence
-v3.1_noUnwarp:
-&emsp; -same as v3_slab but with no fmap correction  
+&emsp; -fmap correction using gre sequence  
+v3.1:  
+&emsp; -same as v3.0 but with no fmap correction  
 **v4: macaque preprocessing: whole-brain  
 &emsp; -fmap correction using gre sequence  
 **v5.1: whole-brain preprocessing  
