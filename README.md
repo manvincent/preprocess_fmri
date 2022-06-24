@@ -13,7 +13,7 @@ preprocess.py uses Nipype
 v1: outdated (no fieldmap correction)  
 v2.0: whole-brain preprocessing  
 &emsp; -fmap correction using gre sequence only  
-v2.1_noUnwarp: same as v2 but with no fmap correction  
+v2.1: same as v2 but with no fmap correction  
 v3.0: partial FOV preprocessing  
 &emsp; -modified registration  
 &emsp; -fmap correction using gre sequence  
