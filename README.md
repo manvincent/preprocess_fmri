@@ -19,12 +19,9 @@ v3.0: partial FOV preprocessing
 &emsp; -fmap correction using gre sequence  
 v3.1:  
 &emsp; -same as v3.0 but with no fmap correction  
-**v4: macaque preprocessing: whole-brain  
+v4: macaque preprocessing: whole-brain  
 &emsp; -fmap correction using gre sequence  
-**v5.1: whole-brain preprocessing  
-&emsp; -unwarping using SE-EPI and topup  
-&emsp; -sigloss estimation using gre; mag and delta phase  
-!v5.2: whole-brain preprocessing  
+!v5.0: whole-brain preprocessing  
 &emsp; -unwarping using SE-EPI and topup  
 &emsp; -sigloss estimation using gre; mag and wrapped phase per echo  
 

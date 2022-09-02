@@ -41,13 +41,13 @@ from nilearn import plotting as niplt
 
 ### Experiment parameters
 # Number of threads
-num_cores = 32 #multiprocessing.cpu_count() # for whole preprocessing (here uses all)
+num_cores = multiprocessing.cpu_count() # for whole preprocessing (here uses all)
 ANTS_num_threads = 4  # for the ANTS modules (can be different than num_cores)
 
 # Locations
 expDir = '/export/home/vman/iowa/fmri/data' # Location of your experiment (main) folder
-rawDir = expDir + os.sep + 'controls_topreproc'  # Location of raw subject folders within your expDir
-outDir = expDir + os.sep + 'Preprocessed_controls'  # Make preprocessing directory within your expDir
+rawDir = expDir + os.sep + 'controls_nofmap'  # Location of raw subject folders within your expDir
+outDir = expDir + os.sep + 'Preprocessed_controls_nofmap'  # Make preprocessing directory within your expDir
 if not os.path.exists(outDir):
     os.makedirs(outDir)
 workDir = outDir + os.sep + 'WorkingDir'  # Working directory inside your 'Preprocessed' folder
@@ -85,7 +85,7 @@ segWM = priorDir + os.sep + 'priors3.nii.gz'
 
 # Specify data to preprocess
 # Count all subfolders
-subList = next(os.walk(rawDir))[1]
+subList = ['sub_5'] #next(os.walk(rawDir))[1]
 #subList = ['sub_1']
 runList = ['run1','run2','run3','run4'] # These should be the same name as your EPI Niftis
 
@@ -98,11 +98,7 @@ WMthresh=0.9 # WM covariate mask cthresholds
 CSFthresh=0.9 # CSF covariate mask thresholds
 aCompCor_varThresh = 0.5
 tCompCor_varThresh = 0.5
-# Fieldmap parameters
-effectEcho = 0.000796
-TE = 0.0253
-unwarpDir = 'y-'
-
+smoothing_kernels = [5,6,8]
 
 #### End experiment parameters
 
@@ -117,7 +113,7 @@ def func_Extract(inEPI):
         lower_cutoff=0.3,
         upper_cutoff=0.8,
         connected=True,
-        opening=1,
+        opening=2,
         exclude_zeros=False,
         ensure_finite=True,
         verbose=0)
@@ -136,22 +132,39 @@ funcMask = pe.Node(fsl.maths.ApplyMask(
     name='funcMask')
 
 # Bias correction on the anatomical
-anatBiasCorrect = pe.Node(ants.N4BiasFieldCorrection(
+anatBiasCorrect_t1 = pe.Node(ants.N4BiasFieldCorrection(
     dimension = 3,
     n_iterations = [50,50,30,20],
     convergence_threshold = 0.0,
     shrink_factor = 3,
     bspline_fitting_distance = 300),
-    name = 'anatBiasCorrect')
+    name = 'anatBiasCorrect_t1')
+
+# Bias correction on the anatomical
+anatBiasCorrect_t2 = pe.Node(ants.N4BiasFieldCorrection(
+    dimension = 3,
+    n_iterations = [50,50,30,20],
+    convergence_threshold = 0.0,
+    shrink_factor = 3,
+    bspline_fitting_distance = 300),
+    name = 'anatBiasCorrect_t2')
 
 # Brain extraction
-anatExtract = pe.Node(ants.segmentation.BrainExtraction(
+anatExtract_t1 = pe.Node(ants.segmentation.BrainExtraction(
     dimension = 3,
     brain_template=extractTemplate,
     brain_probability_mask=extractProb,
     extraction_registration_mask=extractMask,
     num_threads=ANTS_num_threads),
-    name='anatExtract')
+    name='anatExtract_t1')
+
+anatExtract_t2 = pe.Node(ants.segmentation.BrainExtraction(
+    dimension = 3,
+    brain_template=extractTemplate,
+    brain_probability_mask=extractProb,
+    extraction_registration_mask=extractMask,
+    num_threads=ANTS_num_threads),
+    name='anatExtract_t2')
 
 # Tissue segmentation (CSF, GM, WM)
 # Select WM segmentation file from segmentation output
@@ -223,10 +236,9 @@ posLimit = pe.Node(fsl.maths.Threshold(
     output_type='NIFTI_GZ'),
     name='posLimit')
 
-
-
-
-
+smooth = pe.Node(fsl.Smooth(),
+    iterables = ('fwhm',smoothing_kernels),
+    name='smooth')
 
 # Registration/Normalisation workflow
 # Register functiona slab to anatomical
@@ -253,10 +265,10 @@ epi2anat = pe.Node(ants.Registration(
     num_threads=ANTS_num_threads),
     name='epi2anat')
 
-T1toT2 = pe.Node(ants.Registration(
+T2toT1 = pe.Node(ants.Registration(
     dimension=3,
     float=False,
-    output_transform_prefix='T1toT2_',
+    output_transform_prefix='T2toT1_',
     interpolation='Linear',
     winsorize_lower_quantile=0.005,
     winsorize_upper_quantile=0.995,
@@ -274,7 +286,7 @@ T1toT2 = pe.Node(ants.Registration(
     smoothing_sigmas=[[3.0,2.0,1.0,0.0],[3.0,2.0,1.0,0.0]],
     write_composite_transform = True,
     num_threads=ANTS_num_threads),
-    name='T1toT2')
+    name='T2toT1')
 
 
 # Normalise anatomical to standard space
@@ -306,11 +318,19 @@ anat2std = pe.Node(ants.Registration(
     num_threads=ANTS_num_threads),
     name='anat2std')
 
+# Merge registration and normalisation
+if template == 'standard':
+    merge = pe.Node(util.Merge(3),
+        infields=['in1','in2','in3'],
+        name='merge')
 
-# Merge registration (epi2anat) and normalisation (anat2std)
-merge = pe.Node(util.Merge(3),
-    infields=['in1','in2','in3'],
-    name='merge')
+    merge_epi2T1 = pe.Node(util.Merge(2),
+        infields=['in1','in2'],
+        name='merge_epi2T1')
+elif template == 'native':
+    merge = pe.Node(util.Merge(2),
+        infields=['in1','in2'],
+        name='merge')
 
 # Split funcitonal by volumes before applying transformations
 funcSplit = pe.Node(fsl.Split(
@@ -343,7 +363,6 @@ applyTransFunc_epiMask = pe.Node(ants.ApplyTransforms(
     dimension=3,
     interpolation = 'BSpline',
     invert_transform_flags = inv_xfm_flag),
-    iterfield=['input_image'],
     name='applyTransFunc_epiMask')
 
 # Threshold the EPI mask
@@ -379,7 +398,7 @@ applyTransInvCSF = pe.Node(ants.ApplyTransforms(
     args='--float',
     dimension=3,
     interpolation = 'BSpline',
-    invert_transform_flags = [True]),
+    invert_transform_flags = [True, True]),
     name='applyTransInvCSF')
 
 createCSFmask = pe.Node(fsl.Threshold(
@@ -395,7 +414,7 @@ applyTransInvWM = pe.Node(ants.ApplyTransforms(
     args='--float',
     dimension=3,
     interpolation = 'BSpline',
-    invert_transform_flags = [True]),
+    invert_transform_flags = [True, True]),
     name='applyTransInvWM')
 
 createWMmask = pe.Node(fsl.Threshold(
@@ -479,7 +498,7 @@ inputNode_t1 = pe.Node(util.IdentityInterface(
     name='inputNode_t1')
 
 # SelectFiles for Input
-inputData_t1 = {'t1_anat': rawDir + os.sep + '{subject_id}/T1.nii.gz'}
+inputData_t1 = {'t1': rawDir + os.sep + '{subject_id}/T1.nii.gz'}
 
 selectFiles_t1 = pe.Node(nio.SelectFiles(
     inputData_t1,
@@ -500,7 +519,7 @@ inputNode_t2 = pe.Node(util.IdentityInterface(
     name='inputNode_t2')
 
 # SelectFiles for Input
-inputData_t2 = {'t2_anat': rawDir + os.sep + '{subject_id}/T2.nii.gz'}
+inputData_t2 = {'t2': rawDir + os.sep + '{subject_id}/T2.nii.gz'}
 
 selectFiles_t2 = pe.Node(nio.SelectFiles(
     inputData_t2,
@@ -527,7 +546,7 @@ selectFiles_reg = pe.Node(nio.SelectFiles(
     name="selectFiles_reg")
 
 outputNode_reg = pe.Node(util.IdentityInterface(
-    fields=['trans_EPI','epi2anat_xfm']),
+    fields=['trans_EPI','merge_xfm']),
     name='outputNode_reg')
 
 ### Covariate workflow ###
@@ -585,7 +604,7 @@ substitutions = [
     ('highres001_BrainExtractionBrain_pve_2.nii.gz','t1_brain_WM.nii.gz'),
     ('vol0000_trans_merged.nii.gz','func_noDespike_noSmooth.nii.gz'),
     ('vol0000_trans_merged_despike_thresh.nii.gz','prep_noSmooth.nii.gz'),
-    ('_masked_roi_mcf_masked_unwarped_roi_bin_trans_thresh_masked.nii.gz','epi_mask.nii.gz')
+    ('run1_masked_roi_mcf_masked_roi_bin_trans_thresh_masked.nii.gz','epi_mask.nii.gz')
     ]
 dataSink.inputs.substitutions = substitutions
 
@@ -593,29 +612,29 @@ dataSink.inputs.substitutions = substitutions
 t1WF.connect([
     (inputNode_t1, selectFiles_t1, [('subject_id','subject_id')]),
     # Bias correction
-    (selectFiles_t1, anatBiasCorrect,  [('t1_anat','input_image')]),
+    (selectFiles_t1, anatBiasCorrect_t1,  [('t1','input_image')]),
     # Brain extraction and segmentation
-    (anatBiasCorrect, anatExtract, [('output_image','anatomical_image')]),
-    (anatExtract, anatSegment,[('BrainExtractionBrain','in_files')]),
+    (anatBiasCorrect_t1, anatExtract_t1, [('output_image','anatomical_image')]),
+    (anatExtract_t1, anatSegment,[('BrainExtractionBrain','in_files')]),
     # Send to output node
-    (anatExtract, outputNode_t1, [('BrainExtractionBrain','t1_brain'),
+    (anatExtract_t1, outputNode_t1, [('BrainExtractionBrain','t1_brain'),
                                     ('BrainExtractionMask','anatMask')]),
     (anatSegment, outputNode_t1, [(('partial_volume_files',get_csf),'anatCSF'),
                                     (('partial_volume_files',get_wm),'anatWM')]),
     # Outputs to datasink
-    (anatExtract, dataSink, [('BrainExtractionBrain','Extras.@extractBrain'),
-                             ('BrainExtractionMask','Extras.@anatMask')]),
-    (anatSegment, dataSink, [('partial_volume_files','Extras.@segmentBrain')]),
+    (anatExtract_t1, dataSink, [('BrainExtractionBrain','Extras.@extractBrain_t1'),
+                             ('BrainExtractionMask','Extras.@anatMask_t1')]),
+    (anatSegment, dataSink, [('partial_volume_files','Extras.@segmentBrain')])
     ])
 
 t2WF.connect([
     (inputNode_t2, selectFiles_t2, [('subject_id','subject_id')]),
     # Bias correction
-    (selectFiles_t2, anatBiasCorrect,  [('t2_anat','input_image')]),
+    (selectFiles_t2, anatBiasCorrect_t2,  [('t2','input_image')]),
     # Brain extraction and segmentation
-    (anatBiasCorrect, anatExtract, [('output_image','anatomical_image')]),
+    (anatBiasCorrect_t2, anatExtract_t2, [('output_image','anatomical_image')]),
     # Send to output node
-    (anatExtract, outputNode_t2, [('BrainExtractionBrain','t2_brain')]),
+    (anatExtract_t2, outputNode_t2, [('BrainExtractionBrain','t2_brain')]),
     ])
 
 # Registration/Normalisation workflow connections
@@ -623,10 +642,12 @@ if template == 'native':
     regWF.connect([
         (inputNode_reg, epi2anat, [('EPI_refVol','moving_image'),
                                    ('t2_brain','fixed_image')]),
-        (inputnode_reg, T1toT2, [('t2_brain','moving_image'),
+        (inputNode_reg, T2toT1, [('t2_brain','moving_image'),
                                    ('t1_brain','fixed_image')]),
         (inputNode_reg, anat2std, [('t1_brain','moving_image')]),
         (selectFiles_reg, anat2std, [('standard','fixed_image')]),
+        (epi2anat, merge, [('composite_transform','in2')]),
+        (T2toT1, merge, [('composite_transform','in1')]),
         # Split functional image by volumes
         (inputNode_reg, funcSplit, [('in_EPI','in_file')]),
         # Resample final reference image to resolution of functional
@@ -636,15 +657,16 @@ if template == 'native':
         (resampleRef , threshRef, [('output_image','in_file')]),
         (threshRef , maskRef, [('out_file','in_file')]),
         # Send to transformation application
-        (epi2anat, applyTransFunc, [('composite_transform','transforms')]),
+        (merge, applyTransFunc, [('out','transforms')]),
         (funcSplit , applyTransFunc, [('out_files','input_image')]),
         (resampleRef , applyTransFunc, [('output_image','reference_image')]),
         # Merge functional volumes back to image
         (applyTransFunc, funcMerge, [('output_image','in_files')]),
         (funcMerge, outputNode_reg,[('merged_file','trans_EPI')]),
-        (epi2anat, outputNode_reg, [('composite_transform','epi2anat_xfm')]),
+        # Send out composite xfm
+        (merge, outputNode_reg, [('out','merge_xfm')]),
         # Transform EPI mask
-        (epi2anat, applyTransFunc_epiMask, [('composite_transform','transforms')]),
+        (merge, applyTransFunc_epiMask, [('merge','transforms')]),
         (inputNode_reg, applyTransFunc_epiMask, [('EPI_mask','input_image')]),
         (resampleRef, applyTransFunc_epiMask, [('output_image','reference_image')]),
         (applyTransFunc_epiMask , threshEPImask, [('output_image','in_file')]),
@@ -652,7 +674,7 @@ if template == 'native':
         (maskRef, maskEPImask, [('out_file','mask_file')]),
         # Outputs to dataSink
         (epi2anat, dataSink, [('composite_transform','Extras.@epi2anat_xfm')]),
-        (T1toT2, dataSink, [('composite_transform','Extras.@T1toT2_xfm')]),
+        (T2toT1, dataSink, [('composite_transform','Extras.@T2toT1_xfm')]),
         (anat2std, dataSink, [('composite_transform','Extras.@anat2std_xfm')]),
         (resampleRef , dataSink, [('output_image','Extras.@resampleRef')]),
         (maskRef , dataSink, [('out_file','Extras.@resampleRef_mask')]),
@@ -663,12 +685,12 @@ elif template == 'standard':
     regWF.connect([
         (inputNode_reg, epi2anat, [('EPI_refVol','moving_image'),
                                    ('t2_brain','fixed_image')]),
-        (inputNode_reg, T1toT2, [('t2_brain','moving_image'),
+        (inputNode_reg, T2toT1, [('t2_brain','moving_image'),
                                    ('t1_brain','fixed_image')]),
         (inputNode_reg, anat2std, [('t1_brain','moving_image')]),
         (selectFiles_reg, anat2std, [('standard','fixed_image')]),
         (epi2anat, merge, [('composite_transform','in3')]),
-        (T1toT2, merge, [('composite_transform','in2')]),
+        (T2toT1, merge, [('composite_transform','in2')]),
         (anat2std, merge, [('composite_transform','in1')]),
         # Split functional image by volumes
         (inputNode_reg, funcSplit, [('in_EPI','in_file')]),
@@ -679,7 +701,10 @@ elif template == 'standard':
         # Merge functional volumes back to image
         (applyTransFunc, funcMerge, [('output_image','in_files')]),
         (funcMerge, outputNode_reg,[('merged_file','trans_EPI')]),
-        (epi2anat, outputNode_reg, [('composite_transform','epi2anat_xfm')]),
+        # Send out composite xfm
+        (epi2anat, merge_epi2T1, [('composite_transform','in2')]),
+        (T2toT1, merge_epi2T1, [('composite_transform','in1')]),
+        (merge_epi2T1, outputNode_reg, [('out','merge_xfm')]),
         # Transform EPI mask
         (merge, applyTransFunc_epiMask, [('out','transforms')]),
         (inputNode_reg, applyTransFunc_epiMask, [('EPI_mask','input_image')]),
@@ -689,7 +714,7 @@ elif template == 'standard':
         (selectFiles_reg, maskEPImask, [('standard','mask_file')]),
         # Outputs to dataSink
         (epi2anat, dataSink, [('composite_transform','Extras.@epi2anat_xfm')]),
-        (T1toT2, dataSink, [('composite_transform','Extras.@T1toT2_xfm')]),
+        (T2toT1, dataSink, [('composite_transform','Extras.@T2toT1_xfm')]),
         (anat2std, dataSink, [('composite_transform','Extras.@anat2std_xfm')]),
         (maskEPImask, dataSink, [('out_file','Extras.@epi_mask')]),
         (outputNode_reg, dataSink, [('trans_EPI','Extras.@trans_noDespike')]),
@@ -769,18 +794,20 @@ if template == 'native':
         (t1WF, covarWF, [('outputNode_t1.anatCSF','inputNode_covar.in_CSF'),
                            ('outputNode_t1.anatWM','inputNode_covar.in_WM'),
                            ('outputNode_t1.t1_brain','inputNode_covar.extractBrain')]),
-        (regWF, covarWF, [('outputNode_reg.epi2anat_xfm','inputNode_covar.in_transform')]),
+        (regWF, covarWF, [('outputNode_reg.merge_xfm','inputNode_covar.in_transform')]),
         (extractEPIref, covarWF, [('roi_file','inputNode_covar.EPI_refVol')]),
         (motionOutliers, covarWF, [('out_file','inputNode_covar.in_outlier')]),
         # Send for despiking
         (regWF, despike, [('outputNode_reg.trans_EPI','in_file')]),
         (despike, posLimit, [('out_file','in_file')]),
+        (posLimit, smooth, [('out_file','in_file')]),
         # Send final files to output node
         (covarWF, outputNode, [('createRegressor.out_file','covariateDesign')]),
         (posLimit, outputNode, [('out_file','cleanedFile')]),
         # Outputs to to dataSink
+        (smooth, dataSink, [('smoothed_file','Extras.@cleanedSmoothed_')]),
         (outputNode, dataSink, [('covariateDesign','Preprocessed.@covariates'),
-            ('cleanedFile','Preprocessed.@cleanedSmoothed')]), # Final smoothed func
+            ('cleanedFile','Preprocessed.@cleaned')]), # Final unsmoothed func
         ])
 elif template == 'standard':
     preproc.connect([
@@ -814,18 +841,20 @@ elif template == 'standard':
         (t1WF, covarWF, [('outputNode_t1.anatCSF','inputNode_covar.in_CSF'),
                            ('outputNode_t1.anatWM','inputNode_covar.in_WM'),
                            ('outputNode_t1.t1_brain','inputNode_covar.extractBrain')]),
-        (regWF, covarWF, [('outputNode_reg.epi2anat_xfm','inputNode_covar.in_transform')]),
+        (regWF, covarWF, [('outputNode_reg.merge_xfm','inputNode_covar.in_transform')]),
         (extractEPIref, covarWF, [('roi_file','inputNode_covar.EPI_refVol')]),
         (motionOutliers, covarWF, [('out_file','inputNode_covar.in_outlier')]),
         # Send for despiking
         (regWF, despike, [('outputNode_reg.trans_EPI','in_file')]),
         (despike, posLimit, [('out_file','in_file')]),
+        (posLimit, smooth, [('out_file','in_file')]),
         # Send final files to output node
         (covarWF, outputNode, [('createRegressor.out_file','covariateDesign')]),
         (posLimit, outputNode, [('out_file','cleanedFile')]),
-        # Outputs to to dataSink\
+        # Outputs to to dataSink
+        (smooth, dataSink, [('smoothed_file','Extras.@cleanedSmoothed_')]),
         (outputNode, dataSink, [('covariateDesign','Preprocessed.@covariates'),
-                                ('cleanedFile','Preprocessed.@cleanedSmoothed')]), # Final smoothed func
+                                ('cleanedFile','Preprocessed.@cleaned')]), # Final unsmoothed func
         ])
 
 # Visualize overall workflow
